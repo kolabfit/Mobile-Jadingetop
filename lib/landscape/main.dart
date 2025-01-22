@@ -124,7 +124,7 @@ class LoginScreen extends StatelessWidget {
             Expanded(
               flex: 1,
               child: Padding(
-                padding: EdgeInsets.all(40.0),
+                padding: EdgeInsets.all(10.0),
                 child: Container(
                   decoration: BoxDecoration(
                     color: Color(0xFF000842), // Background biru gelap
@@ -132,12 +132,11 @@ class LoginScreen extends StatelessWidget {
                         BorderRadius.circular(20.0), // Sudut melengkung
                   ),
                   child: Center(
-                    child: FractionallySizedBox(
-                      widthFactor: 0.6, // Menyesuaikan ukuran logo
-                      child: Image.asset(
-                        'assets/jadingetop.png', // Path logo
-                        fit: BoxFit.contain,
-                      ),
+                    child: Image.asset(
+                      'assets/jadingetop.png', // Path logo
+                      width: 700, // Lebar logo (diperbesar)
+                      height: 700, // Tinggi logo (diperbesar)
+                      fit: BoxFit.contain, // Menjaga proporsi logo
                     ),
                   ),
                 ),
