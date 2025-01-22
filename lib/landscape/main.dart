@@ -32,11 +32,11 @@ class LoginScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Color(0xFFEAF4FE), // Biru muda
+                    Color(0xFFDBEAFE), // Biru muda
                     Color(0xFFFFFFFF), // Putih
                   ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
               ),
               child: Column(
@@ -118,24 +118,24 @@ class LoginScreen extends StatelessWidget {
               ),
             ),
           ),
-          // Bagian Kanan: Logo
+          // Bagian Kanan: Background dengan Logo di Tengah
           Expanded(
             flex: 1,
             child: Container(
               decoration: BoxDecoration(
                 color: Color(0xFF000842), // Background biru gelap
+                borderRadius: BorderRadius.circular(16.0), // Border melengkung
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  FractionallySizedBox(
-                    widthFactor: 0.6, // Menyesuaikan ukuran logo
-                    child: Image.asset(
-                      'assets/jadingetop.png', // Path logo
-                      fit: BoxFit.contain,
-                    ),
+              margin:
+                  EdgeInsets.all(40.0), // Memberikan padding seperti referensi
+              child: Center(
+                child: FractionallySizedBox(
+                  widthFactor: 0.6, // Menyesuaikan ukuran logo
+                  child: Image.asset(
+                    'assets/jadingetop.png', // Path logo
+                    fit: BoxFit.contain,
                   ),
-                ],
+                ),
               ),
             ),
           ),
