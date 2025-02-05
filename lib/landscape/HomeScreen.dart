@@ -14,7 +14,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _token;
   bool _isLoading = false;
   List<String> _imageUrls = [];
-  late PageController _pageController;
   int _currentPage = 0;
   Timer? _timer;
 
@@ -84,30 +83,21 @@ class _HomeScreenState extends State<HomeScreen> {
       _timer!.cancel();
     }
 
-    _timer = Timer.periodic(Duration(seconds: 2), (timer) {
-      if (_currentPage < _imageUrls.length - 1) {
-        _currentPage++;
-      } else {
-        _currentPage = 0; // Kembali ke halaman pertama
-      }
-      _pageController.animateToPage(
-        _currentPage,
-        duration: Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
+    _timer = Timer.periodic(Duration(seconds: 5), (timer) {
+      setState(() {
+        _currentPage = (_currentPage + 1) % _imageUrls.length;
+      });
     });
   }
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(initialPage: 0);
     _fetchData(-6.9737, 107.6531); // Koordinat Bojongsoang, Bandung
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
     if (_timer != null) {
       _timer!.cancel();
     }
@@ -121,38 +111,42 @@ class _HomeScreenState extends State<HomeScreen> {
           ? Center(child: CircularProgressIndicator())
           : _imageUrls.isEmpty
               ? Center(child: Text('Tidak ada gambar yang tersedia'))
-              : PageView.builder(
-                  controller: _pageController,
-                  itemCount: _imageUrls.length,
-                  itemBuilder: (context, index) {
-                    return Image.network(
-                      _imageUrls[index],
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    (loadingProgress.expectedTotalBytes ?? 1)
-                                : null,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        print('Error loading image: $error');
-                        return Center(
-                          child: Icon(
-                            Icons.broken_image,
-                            size: 100,
-                            color: Colors.grey,
-                          ),
-                        );
-                      },
-                    );
-                  },
+              : Stack(
+                  children: [
+                    AnimatedSwitcher(
+                      duration: Duration(seconds: 1),
+                      switchInCurve: Curves.easeIn,
+                      switchOutCurve: Curves.easeOut,
+                      child: Image.network(
+                        _imageUrls[_currentPage],
+                        key: ValueKey<String>(_imageUrls[_currentPage]),
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      (loadingProgress.expectedTotalBytes ?? 1)
+                                  : null,
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          print('Error loading image: $error');
+                          return Center(
+                            child: Icon(
+                              Icons.broken_image,
+                              size: 100,
+                              color: Colors.grey,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
     );
   }
