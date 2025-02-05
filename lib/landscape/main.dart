@@ -65,25 +65,18 @@ class _LoginScreenState extends State<LoginScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        // Simpan token ke SharedPreferences
-        String token =
-            'a26db4c9-3fbe-4243-ae05-4b89a382f2a6'; // Contoh token yang tetap
+        String token = 'a26db4c9-3fbe-4243-ae05-4b89a382f2a6';
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('authToken', token);
 
-        print('Token berhasil disimpan: $token');
-
-        // Navigasi ke halaman Home
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => HomeScreen()),
         );
       } else {
-        print('Login gagal dengan respons: ${response.body}');
         _showErrorDialog('Login gagal. Silakan periksa kembali data Anda.');
       }
     } catch (e) {
-      print('Terjadi kesalahan saat login: $e');
       _showErrorDialog('Terjadi kesalahan: $e');
     } finally {
       setState(() {
@@ -115,143 +108,169 @@ class _LoginScreenState extends State<LoginScreen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        body: Stack(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFFFFFFF), Color(0xFFEEF4FF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-            ),
-            Row(
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            bool isWideScreen = constraints.maxWidth > 800;
+
+            return Stack(
               children: [
-                Expanded(
-                  flex: 1,
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 40.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Spacer(flex: 2),
-                        Text(
-                          'Login',
-                          style: TextStyle(
-                            fontSize: 36.0,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        SizedBox(height: 8.0),
-                        Text.rich(
-                          TextSpan(
-                            text: 'Kelola konten Anda dengan\n',
-                            style: TextStyle(
-                              fontSize: 16.0,
-                              color: Colors.black54,
-                            ),
-                            children: [
-                              TextSpan(
-                                text: 'mudah dan efisien!',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF0C21C1),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(height: 50.0),
-                        TextField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          decoration: InputDecoration(
-                            labelText: 'Enter your Email',
-                            prefixIcon: Icon(Icons.email_outlined),
-                            border: UnderlineInputBorder(),
-                          ),
-                        ),
-                        SizedBox(height: 20.0),
-                        TextField(
-                          controller: _passwordController,
-                          obscureText: !_isPasswordVisible,
-                          textInputAction: TextInputAction.done,
-                          decoration: InputDecoration(
-                            labelText: 'Enter your Password',
-                            prefixIcon: Icon(Icons.lock_outline),
-                            border: UnderlineInputBorder(),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _isPasswordVisible
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _isPasswordVisible = !_isPasswordVisible;
-                                });
-                              },
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 40.0),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _login,
-                            style: ElevatedButton.styleFrom(
-                              padding: EdgeInsets.symmetric(vertical: 14.0),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(50.0),
-                              ),
-                              backgroundColor: Color(0xFF0C21C1),
-                              elevation: 5,
-                            ),
-                            child: _isLoading
-                                ? CircularProgressIndicator(
-                                    color: Colors.white,
-                                  )
-                                : Text(
-                                    'Login',
-                                    style: TextStyle(
-                                      fontSize: 16.0,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        Spacer(flex: 3),
-                      ],
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFFFFFFF), Color(0xFFEEF4FF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
                   ),
                 ),
-                Expanded(
-                  flex: 1,
-                  child: Padding(
-                    padding: EdgeInsets.all(50.0),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Color(0xFF000842),
-                        borderRadius: BorderRadius.circular(20.0),
-                      ),
-                      child: Center(
-                        child: Image.asset(
-                          'assets/jadingetop.png',
-                          width: 700,
-                          height: 700,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
+                Center(
+                  child: Container(
+                    padding: EdgeInsets.all(20.0),
+                    constraints: BoxConstraints(maxWidth: 1000),
+                    child: isWideScreen
+                        ? Row(
+                            children: [
+                              Expanded(
+                                child: _buildLoginForm(),
+                              ),
+                              Expanded(
+                                child: _buildImageContainer(),
+                              ),
+                            ],
+                          )
+                        : SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                _buildImageContainer(),
+                                SizedBox(height: 20),
+                                _buildLoginForm(),
+                              ],
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoginForm() {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 40.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(height: 40.0),
+          Text(
+            'Login',
+            style: TextStyle(
+              fontSize: 36.0,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          SizedBox(height: 8.0),
+          Text.rich(
+            TextSpan(
+              text: 'Kelola konten Anda dengan\n',
+              style: TextStyle(
+                fontSize: 16.0,
+                color: Colors.black54,
+              ),
+              children: [
+                TextSpan(
+                  text: 'mudah dan efisien!',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0C21C1),
                   ),
                 ),
               ],
             ),
-          ],
+          ),
+          SizedBox(height: 30.0),
+          TextField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            decoration: InputDecoration(
+              labelText: 'Enter your Email',
+              prefixIcon: Icon(Icons.email_outlined),
+              border: UnderlineInputBorder(),
+            ),
+          ),
+          SizedBox(height: 20.0),
+          TextField(
+            controller: _passwordController,
+            obscureText: !_isPasswordVisible,
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: 'Enter your Password',
+              prefixIcon: Icon(Icons.lock_outline),
+              border: UnderlineInputBorder(),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _isPasswordVisible = !_isPasswordVisible;
+                  });
+                },
+              ),
+            ),
+          ),
+          SizedBox(height: 40.0),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _login,
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.symmetric(vertical: 14.0),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(50.0),
+                ),
+                backgroundColor: Color(0xFF0C21C1),
+                elevation: 5,
+              ),
+              child: _isLoading
+                  ? CircularProgressIndicator(
+                      color: Colors.white,
+                    )
+                  : Text(
+                      'Login',
+                      style: TextStyle(
+                        fontSize: 16.0,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+            ),
+          ),
+          SizedBox(height: 40.0),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageContainer() {
+    return Padding(
+      padding: EdgeInsets.all(20.0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Color(0xFF000842),
+          borderRadius: BorderRadius.circular(20.0),
+        ),
+        child: Center(
+          child: Image.asset(
+            'assets/jadingetop.png',
+            width: 400,
+            height: 400,
+            fit: BoxFit.contain,
+          ),
         ),
       ),
     );
