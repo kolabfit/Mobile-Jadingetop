@@ -19,92 +19,162 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _timer;
 
   Future<void> _fetchData(double latitude, double longitude) async {
-    setState(() {
-      _isLoading = true;
+    
+  setState(() {
+    _isLoading = true;
+  });
+  
+
+  try {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    _token = prefs.getString('authToken');
+
+    if (_token == null || _token!.isEmpty) {
+      _showErrorDialog('Token tidak tersedia. Silakan login ulang.');
+      return;
+    }
+
+    Uri uri = Uri.https('jadingetop.ngolab.id', '/api/collection', {
+      'latitude': latitude.toString(),
+      'longitude': longitude.toString(),
     });
 
-    try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      _token = prefs.getString('authToken');
+    final response = await http.get(
+      uri,
+      headers: {
+        'Token': _token!,
+        'Accept': 'application/json',
+      },
+    ).timeout(Duration(seconds: 10), onTimeout: () {
+      throw Exception('Request timeout. Coba lagi nanti.');
+    });
 
-      if (_token == null || _token!.isEmpty) {
-        print('Token tidak tersedia atau kosong.');
-        setState(() {
-          _isLoading = false;
-        });
-        return;
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+
+      if (data['data'] == null ||
+          data['data']['content'] == null ||
+          data['data']['tinkers'] == null) {
+        throw Exception('Data API tidak valid.');
       }
 
-      Uri uri = Uri.https('jadingetop.ngolab.id', '/api/collection', {
-        'latitude': latitude.toString(),
-        'longitude': longitude.toString(),
-      });
+      final contentList = data['data']['content'] as List;
+      final tinkersList = data['data']['tinkers'] as List;
 
-      try {
-        final response = await http.get(
-          uri,
-          headers: {
-            'Token': _token!,
-            'Accept': 'application/json',
-          },
-        );
+      await prefs.setString('cachedAdsData', jsonEncode(contentList));
+      await prefs.setString('cachedTinkersData', jsonEncode(tinkersList));
 
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final contentList = data['data']['content'] as List;
-          final tinkersList = data['data']['tinkers'] as List;
-
-          await prefs.setString('cachedAdsData', jsonEncode(contentList));
-          await prefs.setString('cachedTinkersData', jsonEncode(tinkersList));
-
-          setState(() {
-            _imageUrls =
-                contentList.map((item) => item['file'] as String).toList();
-            _tinkersData = tinkersList
-                .map((item) => item as Map<String, dynamic>)
-                .toList();
-            _isLoading = false;
-            _startAutoScroll();
-          });
-        } else {
-          throw Exception('Response Error Body: ${response.body}');
-        }
-      } catch (e) {
-        print('Gagal mengambil data dari API: $e');
-        _loadCachedData();
-      }
-    } catch (e) {
-      print('Error: $e');
-      _loadCachedData();
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _loadCachedData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? cachedData = prefs.getString('cachedAdsData');
-    String? cachedTinkersData = prefs.getString('cachedTinkersData');
-
-    if (cachedData != null) {
-      final contentList = jsonDecode(cachedData) as List;
       setState(() {
         _imageUrls = contentList.map((item) => item['file'] as String).toList();
+        _tinkersData = tinkersList.map((item) => item as Map<String, dynamic>).toList();
+        _startAutoScroll();
       });
+    } else {
+      throw Exception('Response Error Body: ${response.body}');
+    }
+  } catch (e) {
+    print('Gagal mengambil data dari API: $e');
+
+    // Jika terjadi error, coba load data dari cache
+    bool cacheLoaded = await _loadCachedAdsData();
+
+    if (!cacheLoaded) {
+      _showErrorDialog('Gagal mengambil data. Menggunakan data cache.');
+    }
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
+
+
+  Future<bool> _loadCachedAdsData() async {
+  try {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? cachedAdsData = prefs.getString('cachedAdsData');
+    String? cachedTinkersData = prefs.getString('cachedTinkersData');
+
+    bool cacheAvailable = false;
+
+    // Cek apakah data cache tidak null
+    if (cachedAdsData != null) {
+      // Tambahkan pengecekan validitas data JSON
+      print('Data JSON yang di-cache: $cachedAdsData');
+
+      // Decode data cache
+      final contentList = jsonDecode(cachedAdsData) as List;
+
+      // Cek apakah data tidak kosong
+      if (contentList.isNotEmpty) {
+        setState(() {
+          // Ambil URL dari data yang tidak null
+          _imageUrls = contentList
+              .map((item) => item['file'] as String?)
+              .where((url) => url != null)
+              .cast<String>()
+              .toList();
+        });
+        print('Cached image URLs: $_imageUrls');
+        cacheAvailable = true;
+      } else {
+        print('Cache ditemukan tetapi kosong.');
+      }
+    } else {
+      print('Tidak ada data cache untuk cachedAdsData.');
     }
 
     if (cachedTinkersData != null) {
       final tinkersList = jsonDecode(cachedTinkersData) as List;
-      setState(() {
-        _tinkersData =
-            tinkersList.map((item) => item as Map<String, dynamic>).toList();
-      });
+      if (tinkersList.isNotEmpty) {
+        setState(() {
+          _tinkersData = tinkersList.map((item) => item as Map<String, dynamic>).toList();
+        });
+        cacheAvailable = true;
+      }
     }
 
-    print('Cached tinkers data loaded: $_tinkersData');
-    _startAutoScroll();
+    if (cacheAvailable) {
+      _startAutoScroll();
+    }
+
+    return cacheAvailable;
+  } catch (e) {
+    print('Error saat memuat data cache: $e');
+    return false;
+  }
+}
+
+
+
+
+  void _loadCachedData() async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? cachedData = prefs.getString('cachedAdsData');
+      String? cachedTinkersData = prefs.getString('cachedTinkersData');
+
+      if (cachedData != null) {
+        final contentList = jsonDecode(cachedData) as List;
+        setState(() {
+          _imageUrls =
+              contentList.map((item) => item['file'] as String).toList();
+        });
+      }
+
+      if (cachedTinkersData != null) {
+        final tinkersList = jsonDecode(cachedTinkersData) as List;
+        setState(() {
+          _tinkersData =
+              tinkersList.map((item) => item as Map<String, dynamic>).toList();
+        });
+      }
+
+      _startAutoScroll();
+    } catch (e) {
+      print('Error saat memuat data cache: $e');
+      _showErrorDialog('Gagal memuat data cache.');
+    }
   }
 
   void _startAutoScroll() {
@@ -121,10 +191,31 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+    // Coba load data dari cache terlebih dahulu
+    _loadCachedAdsData();
     _fetchData(-6.9737, 107.6531); // Koordinat Bojongsoang, Bandung
+    
   }
 
   @override

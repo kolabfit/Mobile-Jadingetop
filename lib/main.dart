@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart'; // Import yang benar untuk cek koneksi internet
 import 'HomeScreen.dart';
 
 class MyHttpOverrides extends HttpOverrides {
@@ -44,6 +45,54 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isPasswordVisible = false;
 
+  Future<void> _loadCachedDataOnLogin() async {
+  try {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    // Ambil data cache
+    String? cachedToken = prefs.getString('cachedToken');
+    String? cachedLoginData = prefs.getString('cachedLoginData');
+
+    if (cachedToken != null && cachedLoginData != null) {
+      print('Login dengan data dari cache.');
+
+      // Simpan token ke dalam memori sementara
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString('authToken', cachedToken);
+
+      // Tampilkan pesan kepada pengguna
+      _showAlertDialog('Offline Mode', 'Anda login menggunakan data dari cache.');
+
+      // Navigasi ke HomeScreen
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomeScreen()),
+      );
+    } else {
+      _showErrorDialog('Cache kosong. Silakan periksa koneksi internet Anda.');
+    }
+  } catch (e) {
+    print('Gagal memuat data cache: $e');
+    _showErrorDialog('Gagal memuat data cache. Silakan coba lagi.');
+  }
+}
+
+
+  Future<void> _cacheLoginData(String token, Map<String, dynamic> data) async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+
+      // Simpan data token dan response body ke cache
+      await prefs.setString('cachedToken', token);
+      await prefs.setString('cachedLoginData', jsonEncode(data));
+      await prefs.setString('last_update', DateTime.now().toIso8601String());
+
+      print('Data login berhasil disimpan ke cache.');
+    } catch (e) {
+      print('Gagal menyimpan data login ke cache: $e');
+    }
+  }
+
   Future<void> _login() async {
     setState(() {
       _isLoading = true;
@@ -56,6 +105,14 @@ class _LoginScreenState extends State<LoginScreen> {
     };
 
     try {
+      // Cek koneksi internet
+      final connectivityResult = await Connectivity().checkConnectivity();
+      if (connectivityResult == ConnectivityResult.none) {
+        // Jika tidak ada koneksi, load data dari cache
+        await _loadCachedDataOnLogin();
+        return;
+      }
+
       final response = await http.post(
         Uri.parse(url),
         headers: {'Content-Type': 'application/json'},
@@ -64,10 +121,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-
         String token = data['data']['token'];
+
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('authToken', token);
+
+        // Simpan hasil login dan data dari server ke cache
+        await _cacheLoginData(token, data);
+
+        // Validasi update status setelah login
+        bool isUpdated = await _checkApiUpdateStatus(token);
+
+        if (isUpdated) {
+          _showAlertDialog('Update tersedia', 'Data akan diperbarui.');
+          try {
+            await _fetchLatestData(token);
+          } catch (e) {
+            print('Error saat memperbarui data setelah login: $e');
+            _showErrorDialog(
+                'Gagal memperbarui data terbaru. Silakan cek koneksi Anda.');
+          }
+        } else {
+          _showAlertDialog('Tidak ada update', 'Data di cache masih relevan.');
+        }
 
         Navigator.pushReplacement(
           context,
@@ -77,11 +153,88 @@ class _LoginScreenState extends State<LoginScreen> {
         _showErrorDialog('Login gagal. Silakan periksa kembali data Anda.');
       }
     } catch (e) {
-      _showErrorDialog('Terjadi kesalahan: $e');
+      print('Terjadi kesalahan: $e');
+      await _loadCachedDataOnLogin(); // Load data cache jika terjadi error
     } finally {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  Future<bool> _checkApiUpdateStatus(String token) async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? lastUpdate = prefs.getString('last_update');
+      int lastUpdateUnix = lastUpdate != null
+          ? DateTime.parse(lastUpdate).millisecondsSinceEpoch ~/ 1000
+          : 0;
+
+      Uri statusUri =
+          Uri.https('jadingetop.ngolab.id', '/api/collection/update-status', {
+        'last_update_unix': lastUpdateUnix.toString(),
+      });
+
+      final response = await http.get(
+        statusUri,
+        headers: {
+          'Token': token,
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final statusData = jsonDecode(response.body);
+        return statusData['data']['is_update'] ?? false;
+      } else {
+        print('Error response: ${response.body}');
+        throw Exception('Gagal memeriksa status update.');
+      }
+    } catch (e) {
+      print('Error saat memeriksa status update: $e');
+      return false;
+    }
+  }
+
+  Future<void> _fetchLatestData(String token) async {
+    try {
+      final Uri dataUri = Uri.https('jadingetop.ngolab.id', '/api/collection');
+      final response = await http.get(
+        dataUri,
+        headers: {'Token': token, 'Accept': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        // Validasi data response
+        if (data == null || !data.containsKey('data')) {
+          throw Exception('Data API tidak valid.');
+        }
+
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setString('cachedData', response.body);
+        await prefs.setString('last_update', DateTime.now().toIso8601String());
+
+        print('Data berhasil diperbarui dan disimpan ke cache.');
+      } else {
+        print('Gagal mengambil data terbaru, response body: ${response.body}');
+        throw Exception(
+            'Gagal mengambil data terbaru. Status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Exception saat fetch data terbaru: $e');
+      rethrow; // Lempar ulang exception agar bisa ditangani di fungsi pemanggil
+    }
+  }
+
+  void _loadCachedData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? cachedData = prefs.getString('cachedData');
+    if (cachedData != null) {
+      print('Data dari cache: $cachedData');
+    } else {
+      print('Cache kosong.');
     }
   }
 
@@ -90,6 +243,24 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAlertDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
         content: Text(message),
         actions: [
           TextButton(
