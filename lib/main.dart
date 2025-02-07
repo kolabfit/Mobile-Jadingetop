@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'homescreen.dart';
+import 'HomeScreen.dart';
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        String token = 'a26db4c9-3fbe-4243-ae05-4b89a382f2a6';
+        String token = data['data']['token'];
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('authToken', token);
 
@@ -105,53 +105,49 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final isWideScreen = screenSize.width > 800;
+
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            bool isWideScreen = constraints.maxWidth > 800;
-
-            return Stack(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFFFFFFF), Color(0xFFEEF4FF)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFFFFFFF), Color(0xFFEEF4FF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Center(
+            child: Container(
+              padding: EdgeInsets.all(20.0),
+              constraints: BoxConstraints(maxWidth: 1000),
+              child: isWideScreen
+                  ? Row(
+                      children: [
+                        Flexible(
+                          flex: 1,
+                          child: _buildLoginForm(),
+                        ),
+                        SizedBox(width: 20),
+                        Flexible(
+                          flex: 1,
+                          child: _buildImageContainer(),
+                        ),
+                      ],
+                    )
+                  : SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          _buildImageContainer(),
+                          SizedBox(height: 20),
+                          _buildLoginForm(),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-                Center(
-                  child: Container(
-                    padding: EdgeInsets.all(20.0),
-                    constraints: BoxConstraints(maxWidth: 1000),
-                    child: isWideScreen
-                        ? Row(
-                            children: [
-                              Expanded(
-                                child: _buildLoginForm(),
-                              ),
-                              Expanded(
-                                child: _buildImageContainer(),
-                              ),
-                            ],
-                          )
-                        : SingleChildScrollView(
-                            child: Column(
-                              children: [
-                                _buildImageContainer(),
-                                SizedBox(height: 20),
-                                _buildLoginForm(),
-                              ],
-                            ),
-                          ),
-                  ),
-                ),
-              ],
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
@@ -159,36 +155,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildLoginForm() {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 40.0),
+      padding: EdgeInsets.symmetric(horizontal: 20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(height: 40.0),
+          SizedBox(height: 20.0),
           Text(
             'Login',
             style: TextStyle(
-              fontSize: 36.0,
+              fontSize: 32.0,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
           ),
           SizedBox(height: 8.0),
-          Text.rich(
-            TextSpan(
-              text: 'Kelola konten Anda dengan\n',
-              style: TextStyle(
-                fontSize: 16.0,
-                color: Colors.black54,
-              ),
-              children: [
-                TextSpan(
-                  text: 'mudah dan efisien!',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0C21C1),
-                  ),
-                ),
-              ],
+          Text(
+            'Kelola konten Anda dengan mudah dan efisien!',
+            style: TextStyle(
+              fontSize: 16.0,
+              color: Colors.black54,
             ),
           ),
           SizedBox(height: 30.0),
@@ -223,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-          SizedBox(height: 40.0),
+          SizedBox(height: 30.0),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
@@ -234,12 +219,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(50.0),
                 ),
                 backgroundColor: Color(0xFF0C21C1),
-                elevation: 5,
               ),
               child: _isLoading
-                  ? CircularProgressIndicator(
-                      color: Colors.white,
-                    )
+                  ? CircularProgressIndicator(color: Colors.white)
                   : Text(
                       'Login',
                       style: TextStyle(
@@ -250,27 +232,23 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
             ),
           ),
-          SizedBox(height: 40.0),
         ],
       ),
     );
   }
 
   Widget _buildImageContainer() {
-    return Padding(
-      padding: EdgeInsets.all(20.0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Color(0xFF000842),
-          borderRadius: BorderRadius.circular(20.0),
-        ),
-        child: Center(
-          child: Image.asset(
-            'assets/jadingetop.png',
-            width: 400,
-            height: 400,
-            fit: BoxFit.contain,
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        color: Color(0xFF000842),
+        borderRadius: BorderRadius.circular(20.0),
+      ),
+      child: Center(
+        child: Image.asset(
+          'assets/jadingetop.png',
+          width: 300,
+          height: 300,
+          fit: BoxFit.contain,
         ),
       ),
     );
