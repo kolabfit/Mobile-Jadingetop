@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:marquee/marquee.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -21,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _tinkersData = [];
   int _currentPage = 0;
   Timer? _timer;
+  bool _isPortrait = true; // Menyimpan orientasi berdasarkan setting API
 
   @override
   void initState() {
@@ -34,7 +36,24 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_timer != null) {
       _timer!.cancel();
     }
+    SystemChrome.setPreferredOrientations([]); // Reset orientasi ke default
     super.dispose();
+  }
+
+  /// Fungsi untuk menerapkan orientasi perangkat
+  void _applyOrientation(String setting) {
+    print('Setting orientasi dari API: $setting');
+    if (setting.toLowerCase() == 'potrait') {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ]);
+    } else {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
   }
 
   Future<void> _fetchData(double latitude, double longitude) async {
@@ -63,8 +82,17 @@ class _HomeScreenState extends State<HomeScreen> {
         throw Exception('Request timeout. Coba lagi nanti.');
       });
 
+      print(response.body);
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+
+        // Cek orientasi dari field setting
+        if (data['data'] != null && data['data']['collection'] != null) {
+          String setting = data['data']['collection']['setting'] ?? 'potrait';
+          _isPortrait = setting.toLowerCase() == 'potrait';
+          _applyOrientation(setting); // Terapkan orientasi berdasarkan setting
+        }
 
         if (data['data'] == null ||
             data['data']['content'] == null ||
@@ -72,7 +100,8 @@ class _HomeScreenState extends State<HomeScreen> {
           throw Exception('Data API tidak valid.');
         }
 
-        final contentList = data['data']['content'] as List;
+        final contentList =
+            (data['data']['content'] as Map<String, dynamic>).values.toList();
         final tinkersList = data['data']['tinkers'] as List;
 
         // Simpan data ke cache
@@ -236,7 +265,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ? Image.file(
                           File(_localImagePaths[_currentPage]),
                           key: ValueKey<String>(_localImagePaths[_currentPage]),
-                          fit: BoxFit.cover,
+                          fit: _isPortrait ? BoxFit.fitHeight : BoxFit.fitWidth,
                           width: double.infinity,
                           height: double.infinity,
                         )
@@ -244,7 +273,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? Image.network(
                               _imageUrls[_currentPage],
                               key: ValueKey<String>(_imageUrls[_currentPage]),
-                              fit: BoxFit.cover,
+                              fit: _isPortrait
+                                  ? BoxFit.fitHeight
+                                  : BoxFit.fitWidth,
                               width: double.infinity,
                               height: double.infinity,
                               errorBuilder: (context, error, stackTrace) {

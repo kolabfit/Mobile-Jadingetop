@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/services.dart'; // Tambahkan ini
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
@@ -120,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     final String url = 'https://jadingetop.ngolab.id/api/collection';
-    final Map<String, String> body = {
+    final Map<String, String> bodyinput = {
       'username': _emailController.text,
       'password': _passwordController.text,
     };
@@ -132,9 +133,12 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      final response = await http.post(Uri.parse(url),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode(body));
+      // Send the POST request
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(bodyinput),
+      );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
