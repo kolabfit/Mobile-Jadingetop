@@ -3,7 +3,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:connectivity_plus/connectivity_plus.dart'; // Import yang benar untuk cek koneksi internet
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
 import 'HomeScreen.dart';
 
 class MyHttpOverrides extends HttpOverrides {
@@ -46,50 +48,69 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isPasswordVisible = false;
 
   Future<void> _loadCachedDataOnLogin() async {
-  try {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-
-    // Ambil data cache
-    String? cachedToken = prefs.getString('cachedToken');
-    String? cachedLoginData = prefs.getString('cachedLoginData');
-
-    if (cachedToken != null && cachedLoginData != null) {
-      print('Login dengan data dari cache.');
-
-      // Simpan token ke dalam memori sementara
+    try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
-      await prefs.setString('authToken', cachedToken);
+      String? cachedToken = prefs.getString('cachedToken');
+      String? cachedLoginData = prefs.getString('cachedLoginData');
+      List<String>? cachedImagePaths = prefs.getStringList('localImagePaths');
 
-      // Tampilkan pesan kepada pengguna
-      _showAlertDialog('Offline Mode', 'Anda login menggunakan data dari cache.');
+      print('Cached token: $cachedToken');
+      print('Cached login data: $cachedLoginData');
+      print('Cached image paths: $cachedImagePaths');
 
-      // Navigasi ke HomeScreen
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => HomeScreen()),
-      );
-    } else {
-      _showErrorDialog('Cache kosong. Silakan periksa koneksi internet Anda.');
+      if (cachedToken != null && cachedLoginData != null) {
+        // Pastikan data gambar cache tersedia dan valid
+        if (cachedImagePaths != null && cachedImagePaths.isNotEmpty) {
+          print('Menggunakan gambar cache saat offline.');
+        }
+
+        await prefs.setString('authToken', cachedToken);
+        _showAlertDialog(
+            'Offline Mode', 'Anda login menggunakan data dari cache.');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => HomeScreen()),
+        );
+      } else {
+        _showErrorDialog(
+            'Cache kosong. Silakan periksa koneksi internet Anda.');
+      }
+    } catch (e) {
+      print('Gagal memuat data cache: $e');
+      _showErrorDialog('Gagal memuat data cache. Silakan coba lagi.');
     }
-  } catch (e) {
-    print('Gagal memuat data cache: $e');
-    _showErrorDialog('Gagal memuat data cache. Silakan coba lagi.');
   }
-}
-
 
   Future<void> _cacheLoginData(String token, Map<String, dynamic> data) async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
-
-      // Simpan data token dan response body ke cache
       await prefs.setString('cachedToken', token);
       await prefs.setString('cachedLoginData', jsonEncode(data));
       await prefs.setString('last_update', DateTime.now().toIso8601String());
-
       print('Data login berhasil disimpan ke cache.');
     } catch (e) {
       print('Gagal menyimpan data login ke cache: $e');
+    }
+  }
+
+  Future<void> _downloadAndCacheImage(String url, String filename) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/$filename';
+      final file = File(filePath);
+
+      if (await file.exists()) {
+        print('Gambar sudah ada di cache: $filePath');
+        return;
+      }
+
+      final dio = Dio();
+      final response = await dio.get(url,
+          options: Options(responseType: ResponseType.bytes));
+      await file.writeAsBytes(response.data);
+      print('Gambar berhasil disimpan ke cache: $filePath');
+    } catch (e) {
+      print('Gagal mendownload atau menyimpan gambar: $e');
     }
   }
 
@@ -105,19 +126,15 @@ class _LoginScreenState extends State<LoginScreen> {
     };
 
     try {
-      // Cek koneksi internet
       final connectivityResult = await Connectivity().checkConnectivity();
       if (connectivityResult == ConnectivityResult.none) {
-        // Jika tidak ada koneksi, load data dari cache
         await _loadCachedDataOnLogin();
         return;
       }
 
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      );
+      final response = await http.post(Uri.parse(url),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -125,22 +142,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('authToken', token);
-
-        // Simpan hasil login dan data dari server ke cache
         await _cacheLoginData(token, data);
 
-        // Validasi update status setelah login
         bool isUpdated = await _checkApiUpdateStatus(token);
-
         if (isUpdated) {
           _showAlertDialog('Update tersedia', 'Data akan diperbarui.');
-          try {
-            await _fetchLatestData(token);
-          } catch (e) {
-            print('Error saat memperbarui data setelah login: $e');
-            _showErrorDialog(
-                'Gagal memperbarui data terbaru. Silakan cek koneksi Anda.');
-          }
+          await _fetchLatestData(token);
         } else {
           _showAlertDialog('Tidak ada update', 'Data di cache masih relevan.');
         }
@@ -154,7 +161,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       print('Terjadi kesalahan: $e');
-      await _loadCachedDataOnLogin(); // Load data cache jika terjadi error
+      await _loadCachedDataOnLogin();
     } finally {
       setState(() {
         _isLoading = false;
@@ -170,24 +177,17 @@ class _LoginScreenState extends State<LoginScreen> {
           ? DateTime.parse(lastUpdate).millisecondsSinceEpoch ~/ 1000
           : 0;
 
-      Uri statusUri =
-          Uri.https('jadingetop.ngolab.id', '/api/collection/update-status', {
-        'last_update_unix': lastUpdateUnix.toString(),
-      });
-
-      final response = await http.get(
-        statusUri,
-        headers: {
-          'Token': token,
-          'Accept': 'application/json',
-        },
-      );
+      Uri statusUri = Uri.https(
+          'jadingetop.ngolab.id',
+          '/api/collection/update-status',
+          {'last_update_unix': lastUpdateUnix.toString()});
+      final response = await http.get(statusUri,
+          headers: {'Token': token, 'Accept': 'application/json'});
 
       if (response.statusCode == 200) {
         final statusData = jsonDecode(response.body);
         return statusData['data']['is_update'] ?? false;
       } else {
-        print('Error response: ${response.body}');
         throw Exception('Gagal memeriksa status update.');
       }
     } catch (e) {
@@ -199,42 +199,29 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _fetchLatestData(String token) async {
     try {
       final Uri dataUri = Uri.https('jadingetop.ngolab.id', '/api/collection');
-      final response = await http.get(
-        dataUri,
-        headers: {'Token': token, 'Accept': 'application/json'},
-      );
+      final response = await http.get(dataUri,
+          headers: {'Token': token, 'Accept': 'application/json'});
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final contentList = data['data']['content'] as List;
 
-        // Validasi data response
-        if (data == null || !data.containsKey('data')) {
-          throw Exception('Data API tidak valid.');
+        for (var item in contentList) {
+          String? imageUrl = item['file'];
+          if (imageUrl != null && imageUrl.isNotEmpty) {
+            String filename = imageUrl.split('/').last;
+            await _downloadAndCacheImage(imageUrl, filename);
+          }
         }
 
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setString('cachedData', response.body);
         await prefs.setString('last_update', DateTime.now().toIso8601String());
-
-        print('Data berhasil diperbarui dan disimpan ke cache.');
       } else {
-        print('Gagal mengambil data terbaru, response body: ${response.body}');
-        throw Exception(
-            'Gagal mengambil data terbaru. Status code: ${response.statusCode}');
+        throw Exception('Gagal mengambil data terbaru.');
       }
     } catch (e) {
       print('Exception saat fetch data terbaru: $e');
-      rethrow; // Lempar ulang exception agar bisa ditangani di fungsi pemanggil
-    }
-  }
-
-  void _loadCachedData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? cachedData = prefs.getString('cachedData');
-    if (cachedData != null) {
-      print('Data dari cache: $cachedData');
-    } else {
-      print('Cache kosong.');
     }
   }
 
@@ -246,11 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
         content: Text(message),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            child: Text('OK'),
-          ),
+              onPressed: () => Navigator.of(context).pop(), child: Text('OK')),
         ],
       ),
     );
@@ -264,11 +247,7 @@ class _LoginScreenState extends State<LoginScreen> {
         content: Text(message),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            child: Text('OK'),
-          ),
+              onPressed: () => Navigator.of(context).pop(), child: Text('OK')),
         ],
       ),
     );
