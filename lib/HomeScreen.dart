@@ -22,13 +22,13 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _tinkersData = [];
   int _currentPage = 0;
   Timer? _timer;
-  bool _isPortrait = true; // Menyimpan orientasi berdasarkan setting API
+  bool _isPortrait = true;
 
   @override
   void initState() {
     super.initState();
     _loadCachedAdsData();
-    _fetchData(-6.9737, 107.6531); // Koordinat Bojongsoang, Bandung
+    _fetchData(-6.9737, 107.6531);
   }
 
   @override
@@ -36,11 +36,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_timer != null) {
       _timer!.cancel();
     }
-    SystemChrome.setPreferredOrientations([]); // Reset orientasi ke default
+    SystemChrome.setPreferredOrientations([]);
     super.dispose();
   }
 
-  /// Fungsi untuk menerapkan orientasi perangkat
   void _applyOrientation(String setting) {
     print('Setting orientasi dari API: $setting');
     if (setting.toLowerCase() == 'potrait') {
@@ -82,16 +81,13 @@ class _HomeScreenState extends State<HomeScreen> {
         throw Exception('Request timeout. Coba lagi nanti.');
       });
 
-      print(response.body);
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        // Cek orientasi dari field setting
         if (data['data'] != null && data['data']['collection'] != null) {
           String setting = data['data']['collection']['setting'] ?? 'potrait';
           _isPortrait = setting.toLowerCase() == 'potrait';
-          _applyOrientation(setting); // Terapkan orientasi berdasarkan setting
+          _applyOrientation(setting);
         }
 
         if (data['data'] == null ||
@@ -100,15 +96,30 @@ class _HomeScreenState extends State<HomeScreen> {
           throw Exception('Data API tidak valid.');
         }
 
-        final contentList =
-            (data['data']['content'] as Map<String, dynamic>).values.toList();
+        final dynamic contentData = data['data']['content'];
+
+        // Konversi contentData ke list jika berupa map
+        List<dynamic> contentList;
+        if (contentData is Map) {
+          contentList = contentData.values.toList();
+        } else if (contentData is List) {
+          contentList = contentData;
+        } else {
+          throw Exception('Format data content tidak valid.');
+        }
+
+        contentList = contentList.where((item) {
+          DateTime now = DateTime.now();
+          DateTime startDate = DateTime.parse(item['start_date']);
+          DateTime endDate = DateTime.parse(item['end_date']);
+          return now.isAfter(startDate) && now.isBefore(endDate);
+        }).toList();
+
         final tinkersList = data['data']['tinkers'] as List;
 
-        // Simpan data ke cache
         await prefs.setString('cachedAdsData', jsonEncode(contentList));
         await prefs.setString('cachedTinkersData', jsonEncode(tinkersList));
 
-        // Simpan semua gambar ke lokal
         _localImagePaths.clear();
         for (var item in contentList) {
           String imageUrl = item['file'];
@@ -236,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _buildTinkerText() {
-    if (_tinkersData.isEmpty) return 'Lorem ipsum - ';
+    if (_tinkersData.isEmpty) return '';
     String text =
         _tinkersData.map((tinker) => tinker['title'] ?? 'Untitled').join(' - ');
     print('Tinker text: $text');
@@ -253,7 +264,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ? Center(child: CircularProgressIndicator())
           : Stack(
               children: [
-                // Menampilkan gambar dengan transisi fade
                 AnimatedSwitcher(
                   duration: Duration(seconds: 1),
                   switchInCurve: Curves.easeIn,
@@ -265,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ? Image.file(
                           File(_localImagePaths[_currentPage]),
                           key: ValueKey<String>(_localImagePaths[_currentPage]),
-                          fit: _isPortrait ? BoxFit.fitHeight : BoxFit.fitWidth,
+                          fit: BoxFit.cover,
                           width: double.infinity,
                           height: double.infinity,
                         )
@@ -273,9 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? Image.network(
                               _imageUrls[_currentPage],
                               key: ValueKey<String>(_imageUrls[_currentPage]),
-                              fit: _isPortrait
-                                  ? BoxFit.fitHeight
-                                  : BoxFit.fitWidth,
+                              fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,
                               errorBuilder: (context, error, stackTrace) {
@@ -288,31 +296,31 @@ class _HomeScreenState extends State<HomeScreen> {
                           : Center(
                               child: Text('Tidak ada gambar yang tersedia')),
                 ),
-                // Menampilkan teks bergerak
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    width: double.infinity,
-                    height: isTabletOrDesktop ? 80 : 60,
-                    color: Colors.black87,
-                    padding: EdgeInsets.symmetric(vertical: 10),
-                    child: Marquee(
-                      text: _buildTinkerText(),
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: isTabletOrDesktop ? 24 : 20,
-                        fontWeight: FontWeight.bold,
+                if (_buildTinkerText().isNotEmpty)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      width: double.infinity,
+                      height: isTabletOrDesktop ? 40 : 30,
+                      color: Colors.black54,
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      child: Marquee(
+                        text: _buildTinkerText(),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isTabletOrDesktop ? 14 : 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        scrollAxis: Axis.horizontal,
+                        blankSpace: 50.0,
+                        velocity: 75.0,
+                        pauseAfterRound: Duration(seconds: 0),
+                        startPadding: 10.0,
                       ),
-                      scrollAxis: Axis.horizontal,
-                      blankSpace: 50.0,
-                      velocity: 100.0,
-                      pauseAfterRound: Duration(seconds: 0),
-                      startPadding: 100.0,
                     ),
                   ),
-                ),
               ],
             ),
     );
