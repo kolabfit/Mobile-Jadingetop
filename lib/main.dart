@@ -17,7 +17,7 @@ class MyHttpOverrides extends HttpOverrides {
           (X509Certificate cert, String host, int port) => true;
   }
 }
-
+  
 void main() {
   HttpOverrides.global = MyHttpOverrides();
   runApp(JadiNgetopApp());
