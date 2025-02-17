@@ -8,6 +8,7 @@ import 'package:marquee/marquee.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
+import 'dart:math';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -23,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentPage = 0;
   Timer? _timer;
   bool _isPortrait = true;
+  int _rotationIndex = 0; // 0 = 0°, 1 = 90°, 2 = 180°, 3 = 270°
 
   @override
   void initState() {
@@ -42,16 +44,64 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _applyOrientation(String setting) {
     print('Setting orientasi dari API: $setting');
-    if (setting.toLowerCase() == 'potrait') {
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.portraitUp,
-        DeviceOrientation.portraitDown,
-      ]);
-    } else {
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeLeft,
-        DeviceOrientation.landscapeRight,
-      ]);
+    setState(() {
+      _isPortrait = setting.toLowerCase() == 'potrait';
+    });
+  }
+
+  void _rotateImage() {
+    setState(() {
+      _rotationIndex = (_rotationIndex + 1) % 4;
+    });
+  }
+
+  double get _rotationAngle {
+    return _rotationIndex * (pi / 2);
+  }
+
+  Alignment getTinkerAlignment() {
+    switch (_rotationIndex) {
+      case 1: // 90° Rotasi
+        return Alignment.centerRight;
+      case 2: // 180° Rotasi
+        return Alignment.topCenter;
+      case 3: // 270° Rotasi
+        return Alignment.centerLeft;
+      default: // 0° (Normal)
+        return Alignment.bottomCenter;
+    }
+  }
+
+  EdgeInsets getTinkerPosition(Size screenSize, bool isTabletOrDesktop) {
+    switch (_rotationIndex) {
+      case 1: // 90 degrees
+        return EdgeInsets.only(
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: screenSize.height - (isTabletOrDesktop ? 40 : 30),
+        );
+      case 2: // 180 degrees
+        return EdgeInsets.only(
+          top: 0,
+          right: 0,
+          left: 0,
+          bottom: screenSize.height - (isTabletOrDesktop ? 40 : 30),
+        );
+      case 3: // 270 degrees
+        return EdgeInsets.only(
+          top: 0,
+          right: screenSize.height - (isTabletOrDesktop ? 40 : 30),
+          bottom: 0,
+          left: 0,
+        );
+      default: // 0 degrees
+        return EdgeInsets.only(
+          top: screenSize.height - (isTabletOrDesktop ? 40 : 30),
+          right: 0,
+          bottom: 0,
+          left: 0,
+        );
     }
   }
 
@@ -98,7 +148,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
         final dynamic contentData = data['data']['content'];
 
-        // Konversi contentData ke list jika berupa map
         List<dynamic> contentList;
         if (contentData is Map) {
           contentList = contentData.values.toList();
@@ -258,70 +307,105 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final isTabletOrDesktop = screenSize.width > 600;
+    final tinkerHeight = isTabletOrDesktop ? 40.0 : 30.0;
 
     return Scaffold(
+      backgroundColor: Colors.black,
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
-          : Stack(
-              children: [
-                AnimatedSwitcher(
-                  duration: Duration(seconds: 1),
-                  switchInCurve: Curves.easeIn,
-                  switchOutCurve: Curves.easeOut,
-                  transitionBuilder: (child, animation) {
-                    return FadeTransition(opacity: animation, child: child);
-                  },
-                  child: _localImagePaths.isNotEmpty
-                      ? Image.file(
-                          File(_localImagePaths[_currentPage]),
-                          key: ValueKey<String>(_localImagePaths[_currentPage]),
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                        )
-                      : _imageUrls.isNotEmpty
-                          ? Image.network(
-                              _imageUrls[_currentPage],
-                              key: ValueKey<String>(_imageUrls[_currentPage]),
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: double.infinity,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Center(
-                                  child: Icon(Icons.broken_image,
-                                      size: 100, color: Colors.grey),
-                                );
-                              },
-                            )
-                          : Center(
-                              child: Text('Tidak ada gambar yang tersedia')),
-                ),
-                if (_buildTinkerText().isNotEmpty)
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      width: double.infinity,
-                      height: isTabletOrDesktop ? 40 : 30,
-                      color: Colors.black54,
-                      padding: EdgeInsets.symmetric(vertical: 4),
-                      child: Marquee(
-                        text: _buildTinkerText(),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: isTabletOrDesktop ? 14 : 12,
-                          fontWeight: FontWeight.w500,
+          : GestureDetector(
+              onTapDown: (_) => _rotateImage(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Center(
+                    child: AnimatedSwitcher(
+                      duration: Duration(seconds: 1),
+                      switchInCurve: Curves.easeIn,
+                      switchOutCurve: Curves.easeOut,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(opacity: animation, child: child);
+                      },
+                      child: Transform.rotate(
+                        key: ValueKey<int>(_rotationIndex),
+                        angle: _rotationAngle,
+                        child: Container(
+                          width: _rotationIndex.isOdd
+                              ? screenSize.height
+                              : screenSize.width,
+                          height: _rotationIndex.isOdd
+                              ? screenSize.width
+                              : screenSize.height,
+                          child: FittedBox(
+                            fit: BoxFit.contain,
+                            child: _localImagePaths.isNotEmpty
+                                ? Image.file(
+                                    File(_localImagePaths[_currentPage]),
+                                    key: ValueKey<String>(
+                                        _localImagePaths[_currentPage]),
+                                  )
+                                : _imageUrls.isNotEmpty
+                                    ? Image.network(
+                                        _imageUrls[_currentPage],
+                                        key: ValueKey<String>(
+                                            _imageUrls[_currentPage]),
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                          return Center(
+                                            child: Icon(Icons.broken_image,
+                                                size: 100, color: Colors.grey),
+                                          );
+                                        },
+                                      )
+                                    : Center(
+                                        child: Text(
+                                          'Tidak ada gambar yang tersedia',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                      ),
+                          ),
                         ),
-                        scrollAxis: Axis.horizontal,
-                        blankSpace: 50.0,
-                        velocity: 75.0,
-                        pauseAfterRound: Duration(seconds: 0),
-                        startPadding: 10.0,
                       ),
                     ),
                   ),
-              ],
+                  Positioned(
+                    left: _rotationIndex == 3 ? 0 : null,
+                    right: _rotationIndex == 1 ? 0 : null,
+                    top: _rotationIndex == 2 ? 0 : null,
+                    bottom: _rotationIndex == 0 ? 0 : null,
+                    child: Transform(
+                      alignment: _rotationIndex.isOdd
+                          ? (_rotationIndex == 1
+                              ? Alignment.topRight
+                              : Alignment.topLeft)
+                          : Alignment.center,
+                      transform: Matrix4.rotationZ(_rotationAngle),
+                      child: Container(
+                        width: _rotationIndex.isOdd
+                            ? screenSize.height
+                            : screenSize.width,
+                        height: tinkerHeight,
+                        color: Colors.black54,
+                        alignment: Alignment.center,
+                        child: Marquee(
+                          text: _buildTinkerText(),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          scrollAxis: Axis.horizontal,
+                          blankSpace: 50.0,
+                          velocity: 75.0,
+                          showFadingOnlyWhenScrolling: true,
+                          fadingEdgeStartFraction: 0.1,
+                          fadingEdgeEndFraction: 0.1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
     );
   }
