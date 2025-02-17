@@ -296,11 +296,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   String _buildTinkerText() {
-    if (_tinkersData.isEmpty) return '';
-    String text =
-        _tinkersData.map((tinker) => tinker['title'] ?? 'Untitled').join(' - ');
-    print('Tinker text: $text');
-    return text;
+    if (_tinkersData.isEmpty) {
+      return ''; // Return empty string instead of placeholder text
+    }
+    return _tinkersData
+        .map((tinker) => tinker['title'] ?? '')
+        .where((title) => title.isNotEmpty)
+        .join(' - ');
   }
 
   @override
@@ -357,53 +359,50 @@ class _HomeScreenState extends State<HomeScreen> {
                                           );
                                         },
                                       )
-                                    : Center(
-                                        child: Text(
-                                          'Tidak ada gambar yang tersedia',
-                                          style: TextStyle(color: Colors.white),
-                                        ),
-                                      ),
+                                    : Container(), // Empty container instead of text
                           ),
                         ),
                       ),
                     ),
                   ),
-                  Positioned(
-                    left: _rotationIndex == 3 ? 0 : null,
-                    right: _rotationIndex == 1 ? 0 : null,
-                    top: _rotationIndex == 2 ? 0 : null,
-                    bottom: _rotationIndex == 0 ? 0 : null,
-                    child: Transform(
-                      alignment: _rotationIndex.isOdd
-                          ? (_rotationIndex == 1
-                              ? Alignment.topRight
-                              : Alignment.topLeft)
-                          : Alignment.center,
-                      transform: Matrix4.rotationZ(_rotationAngle),
-                      child: Container(
-                        width: _rotationIndex.isOdd
-                            ? screenSize.height
-                            : screenSize.width,
-                        height: tinkerHeight,
-                        color: Colors.black54,
-                        alignment: Alignment.center,
-                        child: Marquee(
-                          text: _buildTinkerText(),
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                  if (_buildTinkerText()
+                      .isNotEmpty) // Only show if there's text
+                    Positioned(
+                      left: _rotationIndex == 3 ? 0 : null,
+                      right: _rotationIndex == 1 ? 0 : null,
+                      top: _rotationIndex == 2 ? 0 : null,
+                      bottom: _rotationIndex == 0 ? 0 : null,
+                      child: Transform(
+                        alignment: _rotationIndex.isOdd
+                            ? (_rotationIndex == 1
+                                ? Alignment.topRight
+                                : Alignment.topLeft)
+                            : Alignment.center,
+                        transform: Matrix4.rotationZ(_rotationAngle),
+                        child: Container(
+                          width: _rotationIndex.isOdd
+                              ? screenSize.height
+                              : screenSize.width,
+                          height: tinkerHeight,
+                          color: Colors.black54,
+                          alignment: Alignment.center,
+                          child: Marquee(
+                            text: _buildTinkerText(),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            scrollAxis: Axis.horizontal,
+                            blankSpace: 50.0,
+                            velocity: 75.0,
+                            showFadingOnlyWhenScrolling: true,
+                            fadingEdgeStartFraction: 0.1,
+                            fadingEdgeEndFraction: 0.1,
                           ),
-                          scrollAxis: Axis.horizontal,
-                          blankSpace: 50.0,
-                          velocity: 75.0,
-                          showFadingOnlyWhenScrolling: true,
-                          fadingEdgeStartFraction: 0.1,
-                          fadingEdgeEndFraction: 0.1,
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
